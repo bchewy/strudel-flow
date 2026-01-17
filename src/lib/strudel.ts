@@ -34,6 +34,9 @@ function optimizeSoundCalls(strudelString: string): string {
  */
 function isSoundSource(node: AppNode): boolean {
   const category = nodesConfig[node.type]?.category;
+  if (node.type === 'agent-node') {
+    return Boolean(node.data.agentSnippet?.trim());
+  }
   return category === 'Instruments';
 }
 
@@ -51,6 +54,7 @@ export function generateOutput(
   const currentBpc = bpc || useStrudelStore.getState().bpc;
 
   const nodePatterns: Record<string, string> = {};
+  const zoneNodes = nodes.filter((node) => node.type === 'zone-node');
   for (const node of nodes) {
     const strudelOutput = getNodeStrudelOutput(node.type);
     if (!strudelOutput) continue;
@@ -67,6 +71,29 @@ export function generateOutput(
 
   const components = findConnectedComponents(nodes, edges);
   const finalPatterns: { pattern: string; paused: boolean }[] = [];
+
+  const getZoneForAgent = (zoneRef?: string) => {
+    if (!zoneRef) return undefined;
+    return zoneNodes.find(
+      (zone) => zone.id === zoneRef || zone.data.title === zoneRef
+    );
+  };
+
+  const applyZoneRouting = (pattern: string, node: AppNode) => {
+    if (node.type !== 'agent-node') return pattern;
+
+    const zoneRef = node.data.agentAssignedZone || node.data.agentAssignedZoneLabel;
+    const zone = getZoneForAgent(zoneRef);
+    const zoneOutput = zone?.data.zoneOutput ?? 'main';
+    if (zoneOutput === 'mute') return '';
+
+    const gainFallback = zoneOutput === 'monitor' ? '0.35' : '1';
+    const gain = parseFloat(zone?.data.zoneGain ?? gainFallback);
+    if (!Number.isFinite(gain) || gain === 1) {
+      return pattern;
+    }
+    return `${pattern}.gain(${gain})`;
+  };
 
   for (const componentNodeIds of components) {
     const componentNodes = componentNodeIds
@@ -91,7 +118,11 @@ export function generateOutput(
         ? sources
         : sources.filter((node) => node.data.state !== 'paused')
     )
-      .map((node) => nodePatterns[node.id])
+      .map((node) => {
+        const rawPattern = nodePatterns[node.id];
+        if (!rawPattern) return '';
+        return applyZoneRouting(rawPattern, node);
+      })
       .filter(Boolean);
 
     if (activePatterns.length === 0) continue;

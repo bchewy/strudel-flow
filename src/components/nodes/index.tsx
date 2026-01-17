@@ -3,9 +3,12 @@ import { nanoid } from 'nanoid';
 
 import { iconMapping } from '@/data/icon-mapping';
 import { CellState } from './instruments/pad-utils';
+import type { AgentNodeData, ZoneNodeData } from '@/types/scene';
 
 import { SynthSelectNode } from './synths/synth-select-node';
 import { DrumSoundsNode } from './synths/drum-sounds-node';
+import { ZoneNode } from './scene/zone-node';
+import { AgentNode } from './scene/agent-node';
 
 // Instruments
 import { PadNode } from './instruments/pad-node';
@@ -118,6 +121,18 @@ export type WorkflowNodeData = {
   latePattern?: string;
   lateOffsetId?: string;
   latePatternId?: string;
+
+  // Scene node data
+  zoneTarget?: ZoneNodeData['zoneTarget'];
+  zoneAccent?: ZoneNodeData['zoneAccent'];
+  zoneDescription?: ZoneNodeData['zoneDescription'];
+  zoneOutput?: ZoneNodeData['zoneOutput'];
+  zoneGain?: ZoneNodeData['zoneGain'];
+  agentStatus?: AgentNodeData['agentStatus'];
+  agentAvatar?: AgentNodeData['agentAvatar'];
+  agentAssignedZone?: AgentNodeData['agentAssignedZone'];
+  agentAssignedZoneLabel?: AgentNodeData['agentAssignedZoneLabel'];
+  agentSnippet?: AgentNodeData['agentSnippet'];
 };
 
 export type WorkflowNodeProps = NodeProps<Node<WorkflowNodeData>> & {
@@ -128,13 +143,38 @@ export type WorkflowNodeProps = NodeProps<Node<WorkflowNodeData>> & {
 export type NodeConfig = {
   id: AppNodeType;
   title: string;
-  category: 'Instruments' | 'Synths' | 'Audio Effects' | 'Time Effects';
+  category: 'Scene' | 'Instruments' | 'Synths' | 'Audio Effects' | 'Time Effects';
   sound?: string;
   notes?: string;
   icon: keyof typeof iconMapping;
+  defaultData?: Partial<WorkflowNodeData>;
 };
 
 const nodesConfig: Record<AppNodeType, NodeConfig> = {
+  'zone-node': {
+    id: 'zone-node',
+    title: 'Zone',
+    category: 'Scene',
+    icon: 'Layers',
+    defaultData: {
+      zoneTarget: 'web',
+      zoneAccent: '#60a5fa',
+      zoneDescription: 'Define a platform target for live coding.',
+      zoneOutput: 'main',
+      zoneGain: '1',
+    },
+  },
+  'agent-node': {
+    id: 'agent-node',
+    title: 'Agent',
+    category: 'Scene',
+    icon: 'Circle',
+    defaultData: {
+      agentStatus: 'idle',
+      agentAssignedZone: 'Unassigned',
+      agentAssignedZoneLabel: 'Unassigned',
+    },
+  },
   'pad-node': {
     id: 'pad-node',
     title: 'Pad',
@@ -306,6 +346,8 @@ const nodesConfig: Record<AppNodeType, NodeConfig> = {
 };
 
 export const nodeTypes = {
+  'zone-node': ZoneNode,
+  'agent-node': AgentNode,
   'synth-select-node': SynthSelectNode,
   'pad-node': PadNode,
   'arpeggiator-node': ArpeggiatorNode,
@@ -345,18 +387,20 @@ export function createNodeByType({
   type: AppNodeType;
   id?: string;
   position?: XYPosition;
-  data?: WorkflowNodeData;
+  data?: Partial<WorkflowNodeData>;
 }): AppNode {
   const node = nodesConfig[type];
 
   const newNode = {
     id: id ?? nanoid(),
-    data: data ?? {
+    data: {
       title: node.title,
       sound: node.sound,
       notes: node.notes,
       icon: node.icon,
       state: 'running',
+      ...node.defaultData,
+      ...data,
     },
     position: {
       x: position?.x || 0,
@@ -396,7 +440,9 @@ export type AppNode =
   | Node<WorkflowNodeData, 'ply-node'>
   | Node<WorkflowNodeData, 'fm-node'>
   | Node<WorkflowNodeData, 'synth-select-node'>
-  | Node<WorkflowNodeData, 'late-node'>;
+  | Node<WorkflowNodeData, 'late-node'>
+  | Node<WorkflowNodeData, 'zone-node'>
+  | Node<WorkflowNodeData, 'agent-node'>;
 
 export type AppNodeType = NonNullable<AppNode['type']>;
 
